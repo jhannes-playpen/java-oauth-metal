@@ -1,0 +1,8 @@
+/target/
+/tomcat.*
+/*.properties
+
+.classpath
+.project
+.settings/
+.vscode/

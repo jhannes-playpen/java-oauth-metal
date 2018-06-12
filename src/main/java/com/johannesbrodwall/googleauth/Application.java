@@ -129,30 +129,77 @@ public class Application {
                 return;
             }
 
+            if (req.getPathInfo().equals("/profile")) {
+                String accessToken = req.getParameter("access_token");
+                resp.setContentType("text/html");
+                resp.getWriter().write("<body>\n");
+                resp.getWriter().write("<h2>Actions</h2>");
+                resp.getWriter().write("<ul><li><a href='groups?access_token=" + accessToken + "'>Show groups</a></ul>");
+                resp.getWriter().write("<h2>Profile response</h2>");
+                resp.getWriter().write("<textarea cols='120' rows='40'>" + getMyProfile(accessToken) + "</textarea>");
+                return;
+            }
+
+            if (req.getPathInfo().equals("/groups")) {
+                String accessToken = req.getParameter("access_token");
+                resp.setContentType("text/html");
+                resp.getWriter().write("<body>\n");
+                resp.getWriter().write("<h2>Actions</h2>");
+                resp.getWriter().write("<ul><li><a href='profile?access_token=" + accessToken + "'>Show groups</a></ul>");
+                resp.getWriter().write("<h2>Grops response</h2>");
+                resp.getWriter().write("<textarea cols='120' rows='40'>" + getMyGroups(accessToken) + "</textarea>");
+                return;
+            }
+
             if ("/oauth2/callback".equals(req.getPathInfo())) {
                 HttpURLConnection conn = postForm(new URL(getAuthority() + "/oauth2/v2.0/token"),
                         tokenQuery(getRedirectUri(req), req.getParameter("code")));
 
                 if (conn.getResponseCode() < 400) {
                     JsonObject tokenResponse = JsonParser.parseToObject(conn.getInputStream());
-                    resp.getWriter().write("Token response\n\n");
-                    resp.getWriter().write(tokenResponse.toString());
+
+                    resp.setContentType("text/html");
+                    resp.getWriter().write("<body>\n");
+                    resp.getWriter().write("<h2>Token response</h2>");
+                    resp.getWriter().write("<textarea cols='120' rows='20'>" + tokenResponse.toJson() + "</textarea>");
 
                     JsonObject idToken = parseIdTokenPayload(tokenResponse.requiredString("id_token"));
-                    resp.getWriter().write("\n\nID TOKEN\n\n" + idToken + "\n\n");
+                    resp.getWriter().write("<h2>ID TOKEN</h2>\n\n<textarea cols='120' rows='20'>" + idToken + "</textarea>\n\n");
 
+                    resp.getWriter().write("<h2>Actions</h2>");
                     String accessToken = tokenResponse.requiredString("access_token");
+                    resp.getWriter().write("<a href='../profile?access_token=" + accessToken + "'>Get profile with access token</a>");
 
-                    resp.getWriter().write("\n\n");
-                    resp.getWriter().write(getProfile(accessToken));
+                    resp.getWriter().write("</body>\n");
                 } else {
-                    resp.getWriter().write("Uh oh " + JsonParser.parse(conn.getErrorStream()));
+                    resp.getWriter().write("Uh oh " + conn.getResponseCode() + " " + conn.getResponseMessage());
+                    resp.getWriter().write(JsonParser.parse(conn.getErrorStream()).toString());
                 }
             }
 
         }
 
-        private String getProfile(String accessToken) throws IOException, MalformedURLException {
+        private String getMyProfile(String accessToken) throws IOException, MalformedURLException {
+            HttpURLConnection graphConn = (HttpURLConnection) new URL("https://graph.microsoft.com/v1.0/me")
+                    .openConnection();
+            graphConn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            graphConn.setRequestProperty("Accept", "application/json");
+
+            if (graphConn.getResponseCode() < 400) {
+                return JsonParser.parseToObject(graphConn.getInputStream()).toString();
+            } else {
+                String body = graphConn.getResponseMessage() + "\n";
+                try (BufferedReader reader = new BufferedReader( new InputStreamReader(graphConn.getErrorStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        body += line;
+                    }
+                }
+                return body;
+            }
+        }
+
+        private String getMyGroups(String accessToken) throws IOException, MalformedURLException {
             HttpURLConnection graphConn = (HttpURLConnection) new URL("https://graph.microsoft.com/v1.0/me/memberOf")
                     .openConnection();
             graphConn.setRequestProperty("Authorization", "Bearer " + accessToken);
@@ -171,6 +218,7 @@ public class Application {
                 return body;
             }
         }
+
 
         private String tokenQuery(String redirectUri, String code) {
             return "code=" + code + "&client_id=" + clientId + "&client_secret=" + clientSecret + "&redirect_uri="

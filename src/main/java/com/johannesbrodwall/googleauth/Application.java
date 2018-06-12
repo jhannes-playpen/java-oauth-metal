@@ -118,12 +118,14 @@ public class Application {
             }
 
             if (req.getPathInfo().equals("/login")) {
-                String autheticationUrl = getAutheticationUrl(getRedirectUri(req));
+                if (req.getParameter("prompt") != null) {
+                    resp.sendRedirect(getAutheticationUrl(getRedirectUri(req), "offline_access+openid+profile+User.Read+Directory.Read.All+Group.Read.All"));
+                    return;
+                }
+                String autheticationUrl = getAutheticationUrl(getRedirectUri(req),
+                        "offline_access+openid+profile+User.Read");
                 if (req.getParameter("domain_hint") != null) {
                     autheticationUrl += "&domain_hint=" + req.getParameter("domain_hint");
-                }
-                if (req.getParameter("prompt") != null) {
-                    autheticationUrl += "&prompt=" + req.getParameter("prompt");
                 }
                 resp.sendRedirect(autheticationUrl);
                 return;
@@ -222,16 +224,12 @@ public class Application {
 
         private String tokenQuery(String redirectUri, String code) {
             return "code=" + code + "&client_id=" + clientId + "&client_secret=" + clientSecret + "&redirect_uri="
-                    + redirectUri + "&grant_type=authorization_code" + "&scope=" + getScope();
+                    + redirectUri + "&grant_type=authorization_code";
         }
 
-        private String getScope() {
-            return "offline_access+openid+profile+User.Read+Directory.Read.All";
-        }
-
-        private String getAutheticationUrl(String redirectUri) {
+        private String getAutheticationUrl(String redirectUri, String scope) {
             String authenticationQuery = "redirect_uri=" + redirectUri + "&response_type=code"
-                    + "&scope=" + getScope()
+                    + "&scope=" + scope
                     + "&client_id=" + clientId;
             return getAuthority() + "/oauth2/v2.0/authorize" + "?" + authenticationQuery;
         }

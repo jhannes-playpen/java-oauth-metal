@@ -1,6 +1,8 @@
 package com.johannesbrodwall.googleauth;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -11,6 +13,7 @@ import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Properties;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -18,11 +21,14 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Context;
+import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 import org.jsonbuddy.JsonObject;
 import org.jsonbuddy.parse.JsonParser;
 
 public class Application {
+
+    private Properties properties = new Properties();
 
     private static class GoogleAuthenticationServlet extends HttpServlet {
 
@@ -124,7 +130,7 @@ public class Application {
             }
 
             if ("/oauth2/callback".equals(req.getPathInfo())) {
-                HttpURLConnection conn = postForm(new URL("https://login.microsoft.com/common/oauth2/token"),
+                HttpURLConnection conn = postForm(new URL(getAuthority() + "/oauth2/v2.0/token"),
                         tokenQuery(getRedirectUri(req), req.getParameter("code")));
 
                 if (conn.getResponseCode() < 400) {
@@ -147,9 +153,10 @@ public class Application {
         }
 
         private String getProfile(String accessToken) throws IOException, MalformedURLException {
-            HttpURLConnection graphConn = (HttpURLConnection) new URL("https://graph.microsoft.com/v1.0/me/")
+            HttpURLConnection graphConn = (HttpURLConnection) new URL("https://graph.microsoft.com/v1.0/me/memberOf")
                     .openConnection();
             graphConn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            graphConn.setRequestProperty("Accept", "application/json");
 
             if (graphConn.getResponseCode() < 400) {
                 return JsonParser.parseToObject(graphConn.getInputStream()).toString();
@@ -167,19 +174,22 @@ public class Application {
 
         private String tokenQuery(String redirectUri, String code) {
             return "code=" + code + "&client_id=" + clientId + "&client_secret=" + clientSecret + "&redirect_uri="
-                    + redirectUri + "&grant_type=authorization_code" + "&resource=831c1487-a6e9-4b73-953e-2ffb15450993";
+                    + redirectUri + "&grant_type=authorization_code" + "&scope=" + getScope();
+        }
+
+        private String getScope() {
+            return "offline_access+openid+profile+User.Read+Directory.Read.All";
         }
 
         private String getAutheticationUrl(String redirectUri) {
             String authenticationQuery = "redirect_uri=" + redirectUri + "&response_type=code"
-                    + "&scopes=Group.Read.All+User.Read+openid"
-                    // + "&login_hint=johannes.brodwall@soprasteria.com"
+                    + "&scope=" + getScope()
                     + "&client_id=" + clientId;
-            return getAuthority() + "?" + authenticationQuery;
+            return getAuthority() + "/oauth2/v2.0/authorize" + "?" + authenticationQuery;
         }
 
         private String getAuthority() {
-            return "https://login.microsoft.com/" + tenantId + "/oauth2/authorize";
+            return "https://login.microsoftonline.com/" + tenantId;
         }
 
         private String getRedirectUri(HttpServletRequest req) {
@@ -204,7 +214,17 @@ public class Application {
         }
     }
 
+    public Application(String configFile) throws FileNotFoundException, IOException {
+        try (FileReader reader = new FileReader(configFile)) {
+            properties.load(reader);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        new Application(System.getProperty("configFile", "application.properties")).startServer();
+    }
+
+    private void startServer() throws LifecycleException {
         Tomcat tomcat = new Tomcat();
         tomcat.setPort(9080);
         tomcat.start();
@@ -223,20 +243,20 @@ public class Application {
         tomcat.getServer().await();
     }
 
-    private static String getAdClientSecret() {
-        return System.getenv("AD_CLIENT_SECRET");
+    private String getAdClientSecret() {
+        return properties.getProperty("ad.client.secret");
     }
 
-    private static String getAdClientId() {
-        return "831c1487-a6e9-4b73-953e-2ffb15450993";
+    private String getAdClientId() {
+        return properties.getProperty("ad.client.id");
     }
 
-    private static String getGoogleClientSecret() {
-        return System.getenv("GOOGLE_CLIENT_SECRET");
+    private String getGoogleClientSecret() {
+        return properties.getProperty("google.client.secret");
     }
 
-    private static String getGoogleClientId() {
-        return "1074484419690-00tnaj9c1l121c166e4h66spshguspu1.apps.googleusercontent.com";
+    private String getGoogleClientId() {
+        return properties.getProperty("google.client.id");
     }
 
     private static HttpURLConnection postForm(URL url, String body) throws IOException, ProtocolException {

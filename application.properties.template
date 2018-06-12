@@ -1,0 +1,7 @@
+# Get yours at https://apps.dev.microsoft.com/
+ad.client.id=
+ad.client.secret=
+
+# Get yours at https://console.cloud.google.com/apis/credentials
+google.client.id=
+google.client.secret=

@@ -5,3 +5,19 @@ ad.client.secret=
 # Get yours at https://console.cloud.google.com/apis/credentials
 google.client.id=
 google.client.secret=
+
+
+#
+# Azure enterprise application
+#
+
+# Get yours at https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps
+# Configure access by clicking Managed application in local directory
+
+# Find DirectoryId here: https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/Properties
+enterprise.tenant=
+# Also known as ApplicationId under the application
+enterprise.client.id=
+# Create under Keys for the application
+enterprise.client.secret=
+

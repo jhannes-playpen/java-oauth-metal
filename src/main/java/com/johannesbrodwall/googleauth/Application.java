@@ -25,8 +25,12 @@ import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 import org.jsonbuddy.JsonObject;
 import org.jsonbuddy.parse.JsonParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Application {
+
+    private static Logger logger = LoggerFactory.getLogger(Application.class);
 
     private Properties properties = new Properties();
 
@@ -123,10 +127,11 @@ public class Application {
                     return;
                 }
                 String autheticationUrl = getAutheticationUrl(getRedirectUri(req),
-                        "offline_access+openid+profile+User.Read");
+                        "offline_access+openid+profile+User.Read+Directory.AccessAsUser.All");
                 if (req.getParameter("domain_hint") != null) {
                     autheticationUrl += "&domain_hint=" + req.getParameter("domain_hint");
                 }
+                logger.info("Redirecting to {}", autheticationUrl);
                 resp.sendRedirect(autheticationUrl);
                 return;
             }
@@ -154,6 +159,7 @@ public class Application {
             }
 
             if ("/oauth2/callback".equals(req.getPathInfo())) {
+                logger.info("Fetching access token to {}", tokenQuery(getRedirectUri(req), req.getParameter("code")));
                 HttpURLConnection conn = postForm(new URL(getAuthority() + "/oauth2/v2.0/token"),
                         tokenQuery(getRedirectUri(req), req.getParameter("code")));
 
@@ -243,6 +249,157 @@ public class Application {
         }
     }
 
+    private static class EnterpriseActiveDirectoryServlet extends HttpServlet {
+        private String tenantId;
+        private String clientId;
+        private String clientSecret;
+        private String resource = "00000002-0000-0000-c000-000000000000";
+
+        public EnterpriseActiveDirectoryServlet(String clientId, String clientSecret, String tenantId) {
+            this.clientId = clientId;
+            this.clientSecret = clientSecret;
+            this.tenantId = tenantId;
+        }
+
+        @Override
+        protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+            if (req.getPathInfo().equals("/")) {
+                resp.setContentType("text/html");
+                resp.getWriter().append("<html><body>" + "<p><a href='login'>Log in</a></p>"
+                        + "<p><a href='login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>"
+                        + "<p><a href='login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>");
+                return;
+            }
+
+            if (req.getPathInfo().equals("/login")) {
+//                if (req.getParameter("prompt") != null) {
+//                    resp.sendRedirect(getAutheticationUrl(getRedirectUri(req), "offline_access+openid+profile+User.Read+Directory.Read.All+Group.Read.All"));
+//                    return;
+//                }
+                String autheticationUrl = getAutheticationUrl(getRedirectUri(req));
+                logger.info("Redirecting to {}", autheticationUrl);
+                resp.sendRedirect(autheticationUrl);
+                return;
+            }
+
+            if (req.getPathInfo().equals("/profile")) {
+                String accessToken = req.getParameter("access_token");
+                resp.setContentType("text/html");
+                resp.getWriter().write("<body>\n");
+                resp.getWriter().write("<h2>Actions</h2>");
+                resp.getWriter().write("<ul><li><a href='groups?access_token=" + accessToken + "'>Show groups</a></ul>");
+                resp.getWriter().write("<h2>Profile response</h2>");
+                resp.getWriter().write("<textarea cols='120' rows='40'>" + getMyProfile(accessToken) + "</textarea>");
+                return;
+            }
+
+            if (req.getPathInfo().equals("/groups")) {
+                String accessToken = req.getParameter("access_token");
+                resp.setContentType("text/html");
+                resp.getWriter().write("<body>\n");
+                resp.getWriter().write("<h2>Actions</h2>");
+                resp.getWriter().write("<ul><li><a href='profile?access_token=" + accessToken + "'>Show groups</a></ul>");
+                resp.getWriter().write("<h2>Grops response</h2>");
+                resp.getWriter().write("<textarea cols='120' rows='40'>" + getMyGroups(accessToken) + "</textarea>");
+                return;
+            }
+
+            if ("/oauth2/callback".equals(req.getPathInfo())) {
+                if (req.getParameter("error") != null) {
+                    resp.setContentType("text/plain");
+                    resp.getWriter().write(req.getParameter("error") + "\n");
+                    resp.getWriter().write(req.getParameter("error_description") + "\n");
+                    return;
+                }
+                logger.info("Fetching access token to {}", tokenQuery(getRedirectUri(req), req.getParameter("code")));
+                HttpURLConnection conn = postForm(new URL(getAuthority() + "/oauth2/token"),
+                        tokenQuery(getRedirectUri(req), req.getParameter("code")));
+
+                if (conn.getResponseCode() < 400) {
+                    JsonObject tokenResponse = JsonParser.parseToObject(conn.getInputStream());
+
+                    resp.setContentType("text/html");
+                    resp.getWriter().write("<body>\n");
+                    resp.getWriter().write("<h2>Token response</h2>");
+                    resp.getWriter().write("<textarea cols='120' rows='20'>" + tokenResponse.toJson() + "</textarea>");
+
+                    JsonObject idToken = parseIdTokenPayload(tokenResponse.requiredString("id_token"));
+                    resp.getWriter().write("<h2>ID TOKEN</h2>\n\n<textarea cols='120' rows='20'>" + idToken + "</textarea>\n\n");
+
+                    resp.getWriter().write("<h2>Actions</h2>");
+                    String accessToken = tokenResponse.requiredString("access_token");
+                    resp.getWriter().write("<a href='../profile?access_token=" + accessToken + "'>Get profile with access token</a>");
+
+                    resp.getWriter().write("</body>\n");
+                } else {
+                    resp.getWriter().write("Uh oh " + conn.getResponseCode() + " " + conn.getResponseMessage());
+                    resp.getWriter().write(JsonParser.parse(conn.getErrorStream()).toString());
+                }
+            }
+
+        }
+
+        private String getMyProfile(String accessToken) throws IOException, MalformedURLException {
+            HttpURLConnection graphConn = (HttpURLConnection) new URL("https://graph.windows.net/me?api-version=1.6")
+                    .openConnection();
+            graphConn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            graphConn.setRequestProperty("Accept", "application/json");
+
+            if (graphConn.getResponseCode() < 400) {
+                return JsonParser.parseToObject(graphConn.getInputStream()).toString();
+            } else {
+                String body = graphConn.getResponseMessage() + "\n";
+                try (BufferedReader reader = new BufferedReader( new InputStreamReader(graphConn.getErrorStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        body += line;
+                    }
+                }
+                return body;
+            }
+        }
+
+        private String getMyGroups(String accessToken) throws IOException, MalformedURLException {
+            HttpURLConnection graphConn = (HttpURLConnection) new URL("https://graph.microsoft.com/v1.0/me/memberOf")
+                    .openConnection();
+            graphConn.setRequestProperty("Authorization", "Bearer " + accessToken);
+            graphConn.setRequestProperty("Accept", "application/json");
+
+            if (graphConn.getResponseCode() < 400) {
+                return JsonParser.parseToObject(graphConn.getInputStream()).toString();
+            } else {
+                String body = graphConn.getResponseMessage() + "\n";
+                try (BufferedReader reader = new BufferedReader( new InputStreamReader(graphConn.getErrorStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        body += line;
+                    }
+                }
+                return body;
+            }
+        }
+
+
+        private String tokenQuery(String redirectUri, String code) {
+            return "code=" + code + "&client_id=" + clientId + "&client_secret=" + clientSecret + "&redirect_uri="
+                    + redirectUri + "&grant_type=authorization_code&resource=" + resource;
+        }
+
+        private String getAutheticationUrl(String redirectUri) {
+            String authenticationQuery = "redirect_uri=" + redirectUri + "&response_type=code"
+                    + "&client_id=" + clientId + "&resource=" + resource;
+            return getAuthority() + "/oauth2/authorize" + "?" + authenticationQuery;
+        }
+
+        private String getAuthority() {
+            return "https://login.microsoftonline.com/" + tenantId;
+        }
+
+        private String getRedirectUri(HttpServletRequest req) {
+            return req.getScheme() + "://" + req.getServerName() + ":" + req.getServerPort() + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
+        }
+    }
+
     private static class RootServlet extends HttpServlet {
         @Override
         protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -254,8 +411,8 @@ public class Application {
                     + "<p><a href='/multiTenantActiveDirectory/login'>Log in</a></p>"
                     + "<p><a href='/multiTenantActiveDirectory/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>"
                     + "<p><a href='/multiTenantActiveDirectory/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>"
-                    + "<h2>Active Directory</h2>"
-                    + "<p><a href='/activeDirectory/login'>Log in</a></p>"
+                    + "<h2>Enterprise Active Directory App</h2>"
+                    + "<p><a href='/enterprise/login'>Log in</a></p>"
                     + "</body></html>");
         }
     }
@@ -281,12 +438,24 @@ public class Application {
         context.addServletMappingDecoded("/google/*", "googleServlet");
         Tomcat.addServlet(context, "adMultiServlet", new MultiTenantActiveDirectoryServlet(getAdClientId(), getAdClientSecret(), "common"));
         context.addServletMappingDecoded("/multiTenantActiveDirectory/*", "adMultiServlet");
-//        Tomcat.addServlet(context, "adServlet", new MultiTenantActiveDirectoryServlet("78a643e0-2a8e-47ed-a395-4be40e05a2ad", , "b1656b00-ea0b-4ff5-aac7-8fb45323833d"));
-//        context.addServletMappingDecoded("/activeDirectory/*", "adServlet");
+        Tomcat.addServlet(context, "enterpriseServlet", new EnterpriseActiveDirectoryServlet(getEnterpriseClientId(), getEnterpriseClientSecret(), getEnterpriseTenant()));
+        context.addServletMappingDecoded("/enterprise/*", "enterpriseServlet");
         Tomcat.addServlet(context, "rootServlet", new RootServlet());
         context.addServletMappingDecoded("/*", "rootServlet");
 
         tomcat.getServer().await();
+    }
+
+    private String getEnterpriseTenant() {
+        return properties.getProperty("enterprise.tenant");
+    }
+
+    private String getEnterpriseClientSecret() {
+        return properties.getProperty("enterprise.client.secret");
+    }
+
+    private String getEnterpriseClientId() {
+        return properties.getProperty("enterprise.client.id");
     }
 
     private String getAdClientSecret() {

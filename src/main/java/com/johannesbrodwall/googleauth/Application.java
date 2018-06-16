@@ -447,7 +447,7 @@ public class Application {
 
     private void startServer() throws LifecycleException {
         Tomcat tomcat = new Tomcat();
-        tomcat.setPort(getEnv("PORT", 9080));
+        tomcat.setPort(getPort());
         tomcat.start();
 
         Context context = tomcat.addContext("", null);
@@ -462,6 +462,11 @@ public class Application {
         context.addServletMappingDecoded("/*", "rootServlet");
 
         tomcat.getServer().await();
+    }
+
+    private int getPort() {
+        return Integer.parseInt(Optional.ofNullable(System.getenv("PORT"))
+                .orElseGet(() -> System.getProperty("port.http", "9080")));
     }
 
     private int getEnv(String key, int defaultValue) {

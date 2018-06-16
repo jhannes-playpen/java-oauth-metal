@@ -1,4 +1,4 @@
-package com.johannesbrodwall.googleauth;
+package com.johannesbrodwall.gettingstarted;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -15,6 +15,7 @@ import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -30,6 +31,7 @@ import org.jsonbuddy.JsonObject;
 import org.jsonbuddy.parse.JsonParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 public class Application {
 
@@ -98,8 +100,7 @@ public class Application {
         }
 
         private String getRedirectUri(HttpServletRequest req) {
-            return req.getScheme() + "://" + req.getServerName() + ":" + req.getLocalPort()
-                + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
+            return getBaseUrl(req) + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
         }
     }
 
@@ -248,8 +249,9 @@ public class Application {
         }
 
         private String getRedirectUri(HttpServletRequest req) {
-            return req.getScheme() + "://" + req.getServerName() + ":" + req.getServerPort() + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
+			return getBaseUrl(req) + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
         }
+
     }
 
     private static class EnterpriseActiveDirectoryServlet extends HttpServlet {
@@ -402,7 +404,7 @@ public class Application {
         }
 
         private String getRedirectUri(HttpServletRequest req) {
-            return req.getScheme() + "://" + req.getServerName() + ":" + req.getServerPort() + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
+            return getBaseUrl(req) + req.getContextPath() + req.getServletPath() + "/oauth2/callback";
         }
     }
 
@@ -429,9 +431,33 @@ public class Application {
                 writer.append("<p><a href='/enterprise/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>");
                 writer.append("<p><a href='/enterprise/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>");
             }
+
+            writer.append("<h3>HTTP debugging</h3>");
+            writer.append("<ul>");
+            for (String name : Collections.list(req.getHeaderNames())) {
+                writer.append("<li>" + name + " = " + req.getHeader(name) + "</li>");
+            }
+            writer.append("</ul>");
+
+
+
             writer.append("</body></html>");
         }
     }
+
+    private static String getBaseUrl(HttpServletRequest req) {
+        String scheme = Optional.ofNullable(req.getHeader("x-forwarded-proto")).orElse(req.getScheme());
+        String port = Optional.ofNullable(req.getHeader("x-forwarded-port")).orElse(String.valueOf(req.getServerPort()));
+        if (isDefaultPort(scheme, port)) {
+            return scheme + "://" + req.getServerName();            
+        } else {
+            return scheme + "://" + req.getServerName() + ":" + port;
+        }
+    }
+
+	private static boolean isDefaultPort(String scheme, String port) {
+		return (scheme.equals("http") && port.equals("80")) || scheme.equals("https") && port.equals("443");
+	}
 
     public Application(String configFile) throws FileNotFoundException, IOException {
         try (FileReader reader = new FileReader(configFile)) {
@@ -448,7 +474,6 @@ public class Application {
     private void startServer() throws LifecycleException {
         Tomcat tomcat = new Tomcat();
         tomcat.setPort(getPort());
-        tomcat.start();
 
         Context context = tomcat.addContext("", null);
 
@@ -461,6 +486,7 @@ public class Application {
         Tomcat.addServlet(context, "rootServlet", new RootServlet());
         context.addServletMappingDecoded("/*", "rootServlet");
 
+        tomcat.start();
         tomcat.getServer().await();
     }
 

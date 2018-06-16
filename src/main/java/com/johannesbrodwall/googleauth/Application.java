@@ -127,7 +127,7 @@ public class Application {
                     return;
                 }
                 String autheticationUrl = getAutheticationUrl(getRedirectUri(req),
-                        "offline_access+openid+profile+User.Read+Directory.AccessAsUser.All");
+                        "offline_access+openid+profile+User.Read");
                 if (req.getParameter("domain_hint") != null) {
                     autheticationUrl += "&domain_hint=" + req.getParameter("domain_hint");
                 }
@@ -272,11 +272,11 @@ public class Application {
             }
 
             if (req.getPathInfo().equals("/login")) {
-//                if (req.getParameter("prompt") != null) {
-//                    resp.sendRedirect(getAutheticationUrl(getRedirectUri(req), "offline_access+openid+profile+User.Read+Directory.Read.All+Group.Read.All"));
-//                    return;
-//                }
                 String autheticationUrl = getAutheticationUrl(getRedirectUri(req));
+                String prompt = req.getParameter("prompt");
+                if (prompt != null) {
+                    autheticationUrl += "&prompt=" + prompt;
+                }
                 logger.info("Redirecting to {}", autheticationUrl);
                 resp.sendRedirect(autheticationUrl);
                 return;
@@ -413,6 +413,7 @@ public class Application {
                     + "<p><a href='/multiTenantActiveDirectory/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>"
                     + "<h2>Enterprise Active Directory App</h2>"
                     + "<p><a href='/enterprise/login'>Log in</a></p>"
+                    + "<p><a href='/enterprise/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>"
                     + "</body></html>");
         }
     }
@@ -438,7 +439,7 @@ public class Application {
         context.addServletMappingDecoded("/google/*", "googleServlet");
         Tomcat.addServlet(context, "adMultiServlet", new MultiTenantActiveDirectoryServlet(getAdClientId(), getAdClientSecret(), "common"));
         context.addServletMappingDecoded("/multiTenantActiveDirectory/*", "adMultiServlet");
-        Tomcat.addServlet(context, "enterpriseServlet", new EnterpriseActiveDirectoryServlet(getEnterpriseClientId(), getEnterpriseClientSecret(), getEnterpriseTenant()));
+        Tomcat.addServlet(context, "enterpriseServlet", new EnterpriseActiveDirectoryServlet(getEnterpriseClientId(), getEnterpriseClientSecret(), "common"));
         context.addServletMappingDecoded("/enterprise/*", "enterpriseServlet");
         Tomcat.addServlet(context, "rootServlet", new RootServlet());
         context.addServletMappingDecoded("/*", "rootServlet");

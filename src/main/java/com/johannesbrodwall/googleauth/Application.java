@@ -1,18 +1,21 @@
 package com.johannesbrodwall.googleauth;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.Properties;
 
 import javax.servlet.ServletException;
@@ -277,6 +280,9 @@ public class Application {
                 if (prompt != null) {
                     autheticationUrl += "&prompt=" + prompt;
                 }
+                if (req.getParameter("domain_hint") != null) {
+                    autheticationUrl += "&domain_hint=" + req.getParameter("domain_hint");
+                }
                 logger.info("Redirecting to {}", autheticationUrl);
                 resp.sendRedirect(autheticationUrl);
                 return;
@@ -400,27 +406,38 @@ public class Application {
         }
     }
 
-    private static class RootServlet extends HttpServlet {
+    private class RootServlet extends HttpServlet {
         @Override
         protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
             resp.setContentType("text/html");
-            resp.getWriter().append("<html><body>"
-                    + "<h2>Google authentication</h2>"
-                    + "<p><a href='/google/login'>Log in</a></p>"
-                    + "<h2>Multi-tenant Active Directory</h2>"
-                    + "<p><a href='/multiTenantActiveDirectory/login'>Log in</a></p>"
-                    + "<p><a href='/multiTenantActiveDirectory/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>"
-                    + "<p><a href='/multiTenantActiveDirectory/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>"
-                    + "<h2>Enterprise Active Directory App</h2>"
-                    + "<p><a href='/enterprise/login'>Log in</a></p>"
-                    + "<p><a href='/enterprise/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>"
-                    + "</body></html>");
+            PrintWriter writer = resp.getWriter();
+            writer.append("<html><body>");
+            writer.append("<h1>Welcome to the OAuth2 demo</h2>");
+            if (getGoogleClientId() != null) {
+                writer.append("<h2>Google authentication</h2>");
+                writer.append("<p><a href='/google/login'>Log in</a></p>");
+            }
+            if (getAdClientId() != null) {
+                writer.append("<h2>Multi-tenant Active Directory</h2>");
+                writer.append("<p><a href='/multiTenantActiveDirectory/login'>Log in</a></p>");
+                writer.append("<p><a href='/multiTenantActiveDirectory/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>");
+                writer.append("<p><a href='/multiTenantActiveDirectory/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>");
+            }
+            if (getEnterpriseClientId() != null) {
+                writer.append("<h2>Enterprise Active Directory App</h2>");
+                writer.append("<p><a href='/enterprise/login'>Log in</a></p>");
+                writer.append("<p><a href='/enterprise/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>");
+                writer.append("<p><a href='/enterprise/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>");
+            }
+            writer.append("</body></html>");
         }
     }
 
     public Application(String configFile) throws FileNotFoundException, IOException {
         try (FileReader reader = new FileReader(configFile)) {
             properties.load(reader);
+        } catch (FileNotFoundException e) {
+            logger.warn("File not found {}", new File(configFile).getAbsolutePath());
         }
     }
 
@@ -430,7 +447,7 @@ public class Application {
 
     private void startServer() throws LifecycleException {
         Tomcat tomcat = new Tomcat();
-        tomcat.setPort(9080);
+        tomcat.setPort(getEnv("PORT", 9080));
         tomcat.start();
 
         Context context = tomcat.addContext("", null);
@@ -447,32 +464,43 @@ public class Application {
         tomcat.getServer().await();
     }
 
+    private int getEnv(String key, int defaultValue) {
+        String value = System.getenv("key");
+        return value != null ? Integer.parseInt(value) : defaultValue;
+    }
+
+    private String getProperty(String envKey, String propertyKey) {
+        return Optional.ofNullable(System.getenv(envKey))
+                .orElseGet(() -> properties.getProperty(propertyKey));
+    }
+
     private String getEnterpriseTenant() {
-        return properties.getProperty("enterprise.tenant");
+        return getProperty("ENTERPRISE_TENANT", "enterprise.tenant");
     }
 
     private String getEnterpriseClientSecret() {
-        return properties.getProperty("enterprise.client.secret");
+        return getProperty("ENTERPRISE_CLIENT_SECRET", "enterprise.client.secret");
     }
 
+
     private String getEnterpriseClientId() {
-        return properties.getProperty("enterprise.client.id");
+        return getProperty("ENTERPRISE_CLIENT_ID", "enterprise.client.id");
     }
 
     private String getAdClientSecret() {
-        return properties.getProperty("ad.client.secret");
+        return getProperty("AD_CLIENT_SECRET", "ad.client.secret");
     }
 
     private String getAdClientId() {
-        return properties.getProperty("ad.client.id");
+        return getProperty("AD_CLIENT_ID", "ad.client.id");
     }
 
     private String getGoogleClientSecret() {
-        return properties.getProperty("google.client.secret");
+        return getProperty("GOOGLE_CLIENT_ID", "google.client.secret");
     }
 
     private String getGoogleClientId() {
-        return properties.getProperty("google.client.id");
+        return getProperty("GOOGLE_CLIENT_SECRET", "google.client.id");
     }
 
     private static HttpURLConnection postForm(URL url, String body) throws IOException, ProtocolException {

@@ -446,10 +446,18 @@ public class Application {
     }
 
     private static String getBaseUrl(HttpServletRequest req) {
-        String scheme = Optional.ofNullable(req.getHeader("x-forwarded-proto")).orElse(req.getScheme());
+        String scheme = req.getHeader("x-forwarded-proto");
+        if (scheme != null) {
+            if (req.getHeader("x-forwarded-port") == null) {
+                return scheme + "://" + req.getServerName();
+            }
+        } else {
+            scheme = req.getScheme();
+        }
+
         String port = Optional.ofNullable(req.getHeader("x-forwarded-port")).orElse(String.valueOf(req.getServerPort()));
         if (isDefaultPort(scheme, port)) {
-            return scheme + "://" + req.getServerName();            
+            return scheme + "://" + req.getServerName();
         } else {
             return scheme + "://" + req.getServerName() + ":" + port;
         }

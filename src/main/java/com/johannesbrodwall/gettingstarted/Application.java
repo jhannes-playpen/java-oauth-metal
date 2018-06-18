@@ -66,6 +66,7 @@ public class Application {
                 String accessToken = tokenResponse.requiredString("access_token");
                 JsonObject jsonProfile = getProfile(accessToken);
                 resp.getWriter().write("\n\n<h2>Profile</h2>\n\n" + writeTextArea(jsonProfile));
+                resp.getWriter().write("<p><a href='/'>Front page</a></p>");
                 resp.getWriter().write("</body>\n");
             }
         }
@@ -190,6 +191,7 @@ public class Application {
                 writer.write("<p><a href='mygroups?scope=" + scope + "&access_token=" + accessToken + "'>Show my groups</a></p>");
                 writer.write("<p><a href='groups?scope=" + scope + "&access_token=" + accessToken + "'>List all groups</a></p>");
             }
+            writer.write("<p><a href='/'>Front page</a></p>");
         }
 
         private String tokenQuery(String redirectUri, String code) {
@@ -277,6 +279,7 @@ public class Application {
         private void writeActions(PrintWriter writer, String accessToken) {
             writer.write("<h2>Actions</h2>");
             writer.write("<ul><li><a href='profile?access_token=" + accessToken + "'>Show profile</a></ul>");
+            writer.write("<p><a href='/'>Front page</a></p>");
         }
 
         private String tokenQuery(String redirectUri, String code) {
@@ -306,22 +309,24 @@ public class Application {
             PrintWriter writer = resp.getWriter();
             writer.append("<html><body>");
             writer.append("<h1>Welcome to the OAuth2 demo</h2>");
-            writer.append("<h2>Google authentication</h2>");
             if (getGoogleClientId() != null) {
+                writer.append("<h2>Google authentication</h2>");
                 writer.append("<p><a href='/google/login'>Log in</a></p>");
-            } else {
+            } else if (req.getServerName().equals("localhost")) {
+                writer.append("<h2>Google authentication</h2>");
                 writer.append("<p>Register an app at <a href='https://console.cloud.google.com/apis/credentials'>Google developer console</a> to test out Google Authentication</p>");
             }
-            writer.append("<h2>Authentication with the Microsoft Graph API (new)</h2>");
             if (getAdClientId() != null) {
+                writer.append("<h2>Authentication with the <i>Microsoft</i> Graph API (new)</h2>");
                 writer.append("<p><a href='/multiTenantActiveDirectory/login'>Log in</a></p>");
                 writer.append("<p><a href='/multiTenantActiveDirectory/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>");
                 writer.append("<p><a href='/multiTenantActiveDirectory/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>");
-            } else {
+            } else if (req.getServerName().equals("localhost")) {
+                writer.append("<h2>Authentication with the <i>Microsoft</i> Graph API (new)</h2>");
                 writer.append("<p>Register an app at <a href='https://apps.dev.microsoft.com/'>Microsoft App Registration Portal</a> to test out Microsoft Graph API</p>");
             }
             if (getEnterpriseClientId() != null) {
-                writer.append("<h2>Multi-tenant app with the (old) Windows Graph API</h2>");
+                writer.append("<h2>Multi-tenant app with <i>Windows</i> Graph API</h2>");
                 writer.append("<p><a href='/enterprise/login'>Log in</a></p>");
                 writer.append("<p><a href='/enterprise/login?domain_hint=soprasteria.com'>Log in at soprasteria.com domain</a></p>");
                 writer.append("<p><a href='/enterprise/login?prompt=admin_consent'>Log in as admin</a></p>" + "</body></html>");
@@ -430,11 +435,11 @@ public class Application {
     }
 
     private String getGoogleClientSecret() {
-        return getProperty("GOOGLE_CLIENT_ID", "google.client.secret");
+        return getProperty("GOOGLE_CLIENT_SECRET", "google.client.secret");
     }
 
     private String getGoogleClientId() {
-        return getProperty("GOOGLE_CLIENT_SECRET", "google.client.id");
+        return getProperty("GOOGLE_CLIENT_ID", "google.client.id");
     }
 
     private static JsonObject makeGetRequest(URL url, String accessToken) throws IOException, MalformedURLException {

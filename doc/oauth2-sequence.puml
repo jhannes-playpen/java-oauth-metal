@@ -1,0 +1,23 @@
+@startuml OAuth2 Sequence with Azure Active Directory
+
+actor browser as "Web browser"
+participant application as "Application"
+box "Azure"
+    participant idp as "Azure Active Directory"
+    participant api as "Azure Graph API"
+end box
+
+
+browser -> application: Hi
+browser <-- application: Redirect to https://login.microsoft.com\nclient_id, redirect_uri
+browser <-> idp: Log in, consent to sharing information
+browser <-- idp: Redirect to redirect_uri
+browser -> application ++: http parameter code
+application -> idp ++: /oauth2/token\ncode, client_id, client_secret
+application <-- idp --: token response\n(access_token, id_token, ...)
+application -> application: Decode id_token for username, name etc
+application -> api: /me\nAuthorization: bearer <access_token>
+application <-- api: User details
+browser <-- application --: Hi, "Name" 
+
+@enduml

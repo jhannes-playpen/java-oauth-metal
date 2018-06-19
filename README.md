@@ -52,6 +52,11 @@ You can test the setup under Enterprise application login. The decoded
 ID token should contain the Application Role assigned to the user who
 logs in.
 
+### Understanding the Oauth2 code flow
+
+![UML Sequence Diagram of Oauth2 flow](http://www.plantuml.com/plantuml/proxy?src=https://github.com/jhannes-playpen/java-oauth-metal/master/doc/oauth2-sequence.puml)
+
+
 ## Security controls
 
 There are a number of security controls that can be set up for an Enterprise application:

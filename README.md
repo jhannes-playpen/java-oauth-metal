@@ -54,7 +54,7 @@ logs in.
 
 ### Understanding the Oauth2 code flow
 
-![UML Sequence Diagram of Oauth2 flow](http://www.plantuml.com/plantuml/proxy?src=https://github.com/jhannes-playpen/java-oauth-metal/master/doc/oauth2-sequence.puml)
+![UML Sequence Diagram of Oauth2 flow](http://www.plantuml.com/plantuml/proxy?src=https://raw.github.com/jhannes-playpen/java-oauth-metal/master/doc/oauth2-sequence.puml)
 
 
 ## Security controls
